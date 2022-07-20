@@ -7,7 +7,7 @@ import '@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol';
 import '@openzeppelin/contracts/access/Ownable.sol';
 import '@openzeppelin/contracts/security/ReentrancyGuard.sol';
 
-contract ClaimReward is Ownable, ReentrancyGuard {
+contract QuestReward is Ownable, ReentrancyGuard {
     using SafeERC20 for ERC20;
 
     // Admin (multisig address that is settable by Owner)
@@ -20,8 +20,6 @@ contract ClaimReward is Ownable, ReentrancyGuard {
     // campaignID here can be anything, example for Learn and Earn is QuizID
     mapping(string => mapping(address => uint256)) public userRewards;
 
-    // Question: Should we put the mapping here or on our backend?
-    // The trade off is, our ops need to update this for every new campaign/quiz
     // Mapping of campaignID to the ERC Token
     mapping(string => address) public campaignTokens;
 
@@ -42,6 +40,7 @@ contract ClaimReward is Ownable, ReentrancyGuard {
     event Reward(string campaignID, address indexed user, uint256 amount);
     event Fund(address indexed token, address indexed user, uint256 amount);
     event Claim(address indexed user, string campaignID, uint256 amount);
+    event Withdraw(address indexed token, uint256 amount);
 
     // CONSTRUCTOR
 
@@ -49,8 +48,7 @@ contract ClaimReward is Ownable, ReentrancyGuard {
         address _admin
     ) {
         require(_admin != address(0), '0x0 admin');
-        // sale token cannot be 0
-        admin = _admin; // can be 0 (for giveaway)
+        admin = _admin; 
     }
 
     // MODIFIERS
@@ -83,6 +81,15 @@ contract ClaimReward is Ownable, ReentrancyGuard {
         tokenRewardPool[token] += amount;
 
         emit Fund(token, _msgSender(), amount);
+    }
+
+    // Function for withdrawing money from reward pool, in case we want to sunset this contract
+    function withdraw(address token) external onlyAdmin {
+        uint256 amount = tokenRewardPool[token];
+        ERC20(token).safeTransfer(_msgSender(), amount);
+        tokenRewardPool[token] = 0;
+
+        emit Withdraw(token, amount);
     }
 
     // Function to be called when we want to reward user after finishing a campaign
