@@ -47,6 +47,7 @@ contract QuestReward is Ownable, ReentrancyGuard {
     event Fund(string indexed campaignID, address indexed user, uint256 amount);
     event Claim(address indexed user, string campaignID, uint256 amount);
     event Withdraw(address indexed token, uint256 amount);
+    event CreateCampaign(string indexed campaignID);
 
     // CONSTRUCTOR
 
@@ -102,6 +103,18 @@ contract QuestReward is Ownable, ReentrancyGuard {
         emit Withdraw(token, amount);
     }
 
+     // Function to create the campaign/quiz, will be called by rewarder
+    function createCampaign(address tokenAddress, string calldata campaignID) external onlyRewarder {
+        // Need this check to prevent overwriting existing campaign
+        require(campaigns[campaignID].tokenReward == address(0));
+
+        campaigns[campaignID] = CampaignInfo({
+            tokenReward: tokenAddress,
+            rewardPool: 0
+        });
+        emit CreateCampaign(campaignID);
+    }  
+
     // Function to be called when we want to reward user after finishing a campaign
     function reward(uint256 amount, address user, string calldata campaignID) external onlyRewarder {
         // transfer specified amount from funder to this contract
@@ -122,7 +135,7 @@ contract QuestReward is Ownable, ReentrancyGuard {
         require(amountToBeClaimed <= campaigns[campaignID].rewardPool, 'reward pool is not enough');
         userRewards[campaignID][_msgSender()] = 0;
         claimedRewards[campaignID][_msgSender()] += amountToBeClaimed;
-        
+
         campaigns[campaignID].rewardPool -= amountToBeClaimed;
 
         ERC20(rewardToken).safeTransfer(_msgSender(), amountToBeClaimed);
@@ -131,5 +144,5 @@ contract QuestReward is Ownable, ReentrancyGuard {
         totalRewardsClaimed[rewardToken] += amountToBeClaimed;
 
         emit Claim(_msgSender(), campaignID, amountToBeClaimed);
-    }  
+    }
 }
