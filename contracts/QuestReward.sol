@@ -76,6 +76,8 @@ contract QuestReward is Ownable, ReentrancyGuard {
 
     // Function for owner to set an rewarder
     function setRewarder(address _rewarder) external onlyAdmin {
+        require(_rewarder != address(0), '0x0 address');
+
         rewarder = _rewarder;
 
         emit SetRewarder(_rewarder);
@@ -106,7 +108,7 @@ contract QuestReward is Ownable, ReentrancyGuard {
      // Function to create the campaign/quiz, will be called by rewarder
     function createCampaign(address tokenAddress, string calldata campaignID) external onlyRewarder {
         // Need this check to prevent overwriting existing campaign
-        require(campaigns[campaignID].tokenReward == address(0));
+        require(campaigns[campaignID].tokenReward == address(0), 'campaign has been set');
 
         campaigns[campaignID] = CampaignInfo({
             tokenReward: tokenAddress,
@@ -128,7 +130,7 @@ contract QuestReward is Ownable, ReentrancyGuard {
     }
 
     // Function to be called when our user wants to claim their reward
-    function claim(string calldata campaignID) external {
+    function claim(string calldata campaignID) external nonReentrant {
         address rewardToken = campaigns[campaignID].tokenReward;
         uint256 amountToBeClaimed = userRewards[campaignID][_msgSender()];
 
