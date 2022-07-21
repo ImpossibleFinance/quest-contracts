@@ -10,9 +10,6 @@ import '@openzeppelin/contracts/security/ReentrancyGuard.sol';
 contract QuestReward is Ownable, ReentrancyGuard {
     using SafeERC20 for ERC20;
 
-    // Admin (multisig address that is settable by Owner)
-    address public admin;
-
     // Rewarder (address that is settable by admin)
     address public rewarder;
 
@@ -55,17 +52,10 @@ contract QuestReward is Ownable, ReentrancyGuard {
         address _admin
     ) {
         require(_admin != address(0), '0x0 admin');
-        admin = _admin; 
+        transferOwnership(_admin); 
     }
 
     // MODIFIERS
-
-    // Throws if called by any account other than the admin.
-    modifier onlyAdmin() {
-        require(_msgSender() == admin, 'caller not admin');
-        _;
-    }
-
      modifier onlyRewarder() {
         require(_msgSender() == rewarder, 'caller not rewarder');
         _;
@@ -75,7 +65,7 @@ contract QuestReward is Ownable, ReentrancyGuard {
     // FUNCTIONS
 
     // Function for owner to set an rewarder
-    function setRewarder(address _rewarder) external onlyAdmin {
+    function setRewarder(address _rewarder) external onlyOwner {
         require(_rewarder != address(0), '0x0 address');
 
         rewarder = _rewarder;
@@ -95,7 +85,7 @@ contract QuestReward is Ownable, ReentrancyGuard {
     }
 
     // Function for withdrawing money from reward pool, in case we want to sunset this contract
-    function withdraw(string calldata campaignID) external onlyAdmin {
+    function withdraw(string calldata campaignID) external onlyOwner {
         address token = campaigns[campaignID].tokenReward;
         uint256 amount = campaigns[campaignID].rewardPool;
 
