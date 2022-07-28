@@ -8,6 +8,8 @@ import { loadFixture } from 'ethereum-waffle'
 
 const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000'
 const campaignID = 'campaign1'
+const REWARD_POOL = 1000
+const USER_REWARD = 100
 
 export const mineNext = async (): Promise<void> => {
   await network.provider.send('evm_mine') // mine next (+1 blockheight)
@@ -21,6 +23,7 @@ export default describe('QuestReward', function () {
   let admin: SignerWithAddress
   let rewarder: SignerWithAddress
   let user: SignerWithAddress
+  let user2: SignerWithAddress
   let QuestRewardContract: Contract
   let TestToken: Contract
 
@@ -36,6 +39,7 @@ export default describe('QuestReward', function () {
     admin = (await ethers.getSigners())[1]
     rewarder = (await ethers.getSigners())[2]
     user = (await ethers.getSigners())[3]
+    user2 = (await ethers.getSigners())[4]
 
     const TestTokenFactory = await ethers.getContractFactory('GenericToken')
 
@@ -58,9 +62,21 @@ export default describe('QuestReward', function () {
       TestToken.address,
       campaignID
     )
+
     mineNext()
 
-    return { campaignID, QuestRewardContract }
+    return { campaignID }
+  }
+
+  async function sendTokenToAdmin() {
+    await TestToken.transfer(admin.address, '100000000000000') // 1000 tokens
+    await TestToken.connect(admin).approve(
+      QuestRewardContract.address,
+      '10000000000000'
+    )
+    mineNext()
+
+    return { admin }
   }
 
   it('cannot sets rewarder with empty address', async function () {
@@ -87,43 +103,44 @@ export default describe('QuestReward', function () {
     expect(campaignInfo.tokenReward).to.equal(TestToken.address)
   })
 
-  it('cannot create campaign with exisiting campaignID', async () => {
-    const { campaignID, QuestRewardContract } = await loadFixture(
-      createCampaign
-    )
+  it('cannot reward when no users', async () => {
+    expect(
+      QuestRewardContract.connect(rewarder).reward([], [], campaignID)
+    ).to.be.revertedWith('amounts and users should be more than zero')
+  })
+
+  it('cannot reward when amounts are not the same as users', async () => {
+    expect(
+      QuestRewardContract.connect(rewarder).reward(
+        [1, 2, 3],
+        [user.address],
+        campaignID
+      )
+    ).to.be.revertedWith('amounts is not the same as users')
+  })
+
+  it('campaign can be created, funded, rewarded, claimed and withdrawed', async () => {
+    // Transferring token to admin
+    const { admin } = await loadFixture(sendTokenToAdmin)
+
+    const OwnerBalance = await TestToken.balanceOf(admin.address)
+
+    // Creating campaign
+    await loadFixture(createCampaign)
+
     expect(
       QuestRewardContract.connect(rewarder).createCampaign(
         TestToken.address,
         campaignID
       )
     ).to.be.revertedWith('campaign has been set')
-  })
-
-  it('campaign can be created, funded, rewarded, claimed and withdrawed', async () => {
-    mineNext()
-
-    const REWARD_POOL = 1000
-    const USER_REWARD = 100
-
-    // Transferring token to admin
-    await TestToken.transfer(admin.address, '10000000000000') // 1000 tokens
-    await TestToken.connect(admin).approve(QuestRewardContract.address, '1000')
-    mineNext()
-
-    const OwnerBalance = await TestToken.balanceOf(admin.address)
-
-    // Creating campaign
-    await QuestRewardContract.connect(rewarder).createCampaign(
-      TestToken.address,
-      campaignID
-    )
-    mineNext()
 
     // Funding the campaign
     await QuestRewardContract.connect(admin).fund(REWARD_POOL, campaignID)
     mineNext()
-    const campaignInfo = await QuestRewardContract.campaigns(campaignID)
-    expect(campaignInfo.rewardPool).to.equal(REWARD_POOL)
+
+    const campaignInfo2 = await QuestRewardContract.campaigns(campaignID)
+    expect(campaignInfo2.rewardPool).to.equal(REWARD_POOL)
 
     // Rewarding the user
     await QuestRewardContract.connect(rewarder).reward(
@@ -144,12 +161,26 @@ export default describe('QuestReward', function () {
     )
     expect(totalRewards).to.equal(USER_REWARD)
 
-    // User Claiming the reward
+    // Rewarding user 2
+    await QuestRewardContract.connect(rewarder).reward(
+      [REWARD_POOL],
+      [user2.address],
+      campaignID
+    )
+    mineNext()
+
+    // User1 Claiming the reward
     await QuestRewardContract.connect(user).claim(campaignID)
     mineNext()
     expect(await TestToken.balanceOf(user.address)).to.equal(
       USER_REWARD.toString()
     )
+
+    // User2 Claiming the reward, should fail because pool is not enough
+    expect(
+      QuestRewardContract.connect(user2).claim(campaignID)
+    ).to.be.revertedWith('reward pool is not enough')
+
     // After claim, need to reinitialize
     const campaignInfoClaim = await QuestRewardContract.campaigns(campaignID)
     const userDataClaim = await QuestRewardContract.userRewards(
@@ -164,6 +195,9 @@ export default describe('QuestReward', function () {
     )
     expect(claimedInfo).to.equal(USER_REWARD)
 
+    // Non admin should not be able to withdraw
+    expect(QuestRewardContract.connect(user).withdraw(campaignID)).to.be
+      .reverted
     // Admin withdrawing idle rewards
     await QuestRewardContract.connect(admin).withdraw(campaignID)
     mineNext()

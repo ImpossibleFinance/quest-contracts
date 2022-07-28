@@ -110,7 +110,7 @@ contract QuestReward is Ownable, ReentrancyGuard {
     // Function to be called when we want to reward user after finishing a campaign
     function reward(uint256[] calldata amounts, address[] calldata users, string calldata campaignID) external onlyRewarder {
         require(amounts.length > 0 && users.length > 0 , 'amounts and users should be more than zero');
-        require(amounts.length <= users.length , 'amounts is less than users');
+        require(amounts.length == users.length || amounts.length == 1 , 'amounts is not the same as users');
 
         bool singleAmount = amounts.length == 1; 
 
