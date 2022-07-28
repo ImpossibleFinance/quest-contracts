@@ -3,6 +3,8 @@ import { ethers, network } from 'hardhat'
 import { expect } from 'chai'
 import { SignerWithAddress } from '@nomiclabs/hardhat-ethers/signers'
 import { Contract } from 'ethers'
+import { loadFixture } from 'ethereum-waffle'
+// const { loadFixture } = require("@nomicfoundation/hardhat-network-helpers");
 
 const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000'
 const campaignID = 'campaign1'
@@ -51,6 +53,16 @@ export default describe('QuestReward', function () {
     mineNext()
   })
 
+  async function createCampaign() {
+    await QuestRewardContract.connect(rewarder).createCampaign(
+      TestToken.address,
+      campaignID
+    )
+    mineNext()
+
+    return { campaignID, QuestRewardContract }
+  }
+
   it('cannot sets rewarder with empty address', async function () {
     await expect(
       QuestRewardContract.connect(admin).setRewarder(ZERO_ADDRESS)
@@ -73,6 +85,18 @@ export default describe('QuestReward', function () {
     mineNext()
     const campaignInfo = await QuestRewardContract.campaigns(campaignID)
     expect(campaignInfo.tokenReward).to.equal(TestToken.address)
+  })
+
+  it('cannot create campaign with exisiting campaignID', async () => {
+    const { campaignID, QuestRewardContract } = await loadFixture(
+      createCampaign
+    )
+    expect(
+      QuestRewardContract.connect(rewarder).createCampaign(
+        TestToken.address,
+        campaignID
+      )
+    ).to.be.revertedWith('campaign has been set')
   })
 
   it('campaign can be created, funded, rewarded, claimed and withdrawed', async () => {
@@ -103,8 +127,8 @@ export default describe('QuestReward', function () {
 
     // Rewarding the user
     await QuestRewardContract.connect(rewarder).reward(
-      USER_REWARD,
-      user.address,
+      [USER_REWARD],
+      [user.address],
       campaignID
     )
     mineNext()
