@@ -24,6 +24,9 @@ export default describe('QuestReward', function () {
   let rewarder: SignerWithAddress
   let user: SignerWithAddress
   let user2: SignerWithAddress
+  let user3: SignerWithAddress
+  let user4: SignerWithAddress
+  let user5: SignerWithAddress
   let QuestRewardContract: Contract
   let TestToken: Contract
 
@@ -40,6 +43,9 @@ export default describe('QuestReward', function () {
     rewarder = (await ethers.getSigners())[2]
     user = (await ethers.getSigners())[3]
     user2 = (await ethers.getSigners())[4]
+    user3 = (await ethers.getSigners())[5]
+    user4 = (await ethers.getSigners())[6]
+    user5 = (await ethers.getSigners())[7]
 
     const TestTokenFactory = await ethers.getContractFactory('GenericToken')
 
@@ -145,7 +151,7 @@ export default describe('QuestReward', function () {
     // Rewarding the user
     await QuestRewardContract.connect(rewarder).reward(
       [USER_REWARD],
-      [user.address],
+      [user.address, user5.address],
       campaignID
     )
     mineNext()
@@ -159,15 +165,27 @@ export default describe('QuestReward', function () {
     const totalRewards = await QuestRewardContract.totalRewards(
       TestToken.address
     )
-    expect(totalRewards).to.equal(USER_REWARD)
+    expect(totalRewards).to.equal(USER_REWARD * 2)
 
-    // Rewarding user 2
+    const extraRewards = [20, 50, 1000]
+    const usersAddress = [user2.address, user3.address, user4.address]
+    mineNext()
+
+    // Rewarding multiple users
     await QuestRewardContract.connect(rewarder).reward(
-      [REWARD_POOL],
-      [user2.address],
+      extraRewards,
+      usersAddress,
       campaignID
     )
     mineNext()
+
+    for (let i = 0; i < usersAddress.length; i++) {
+      const userReward = await QuestRewardContract.userRewards(
+        campaignID,
+        usersAddress[i]
+      )
+      expect(userReward.toNumber()).to.equal(extraRewards[i])
+    }
 
     // User1 Claiming the reward
     await QuestRewardContract.connect(user).claim(campaignID)
@@ -176,9 +194,9 @@ export default describe('QuestReward', function () {
       USER_REWARD.toString()
     )
 
-    // User2 Claiming the reward, should fail because pool is not enough
+    // User4 Claiming the reward, should fail because pool is not enough
     expect(
-      QuestRewardContract.connect(user2).claim(campaignID)
+      QuestRewardContract.connect(user4).claim(campaignID)
     ).to.be.revertedWith('reward pool is not enough')
 
     // After claim, need to reinitialize
