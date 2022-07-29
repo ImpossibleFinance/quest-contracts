@@ -40,7 +40,7 @@ contract QuestReward is Ownable, ReentrancyGuard {
     // EVENTS
 
     event SetRewarder(address indexed rewarder);
-    event Reward(string campaignID, address indexed user, uint256 amount);
+    event Reward(string indexed campaignID, address[] users, uint256[] amounts);
     event Fund(string indexed campaignID, address indexed user, uint256 amount);
     event Claim(address indexed user, string campaignID, uint256 amount);
     event Withdraw(address indexed token, uint256 amount);
@@ -108,15 +108,23 @@ contract QuestReward is Ownable, ReentrancyGuard {
     }  
 
     // Function to be called when we want to reward user after finishing a campaign
-    function reward(uint256 amount, address user, string calldata campaignID) external onlyRewarder {
-        // transfer specified amount from funder to this contract
-        userRewards[campaignID][user] += amount;
-        address token = campaigns[campaignID].tokenReward;
+    function reward(uint256[] calldata amounts, address[] calldata users, string calldata campaignID) external onlyRewarder {
+        require(amounts.length > 0 && users.length > 0 , 'amounts and users should be more than zero');
+        require(amounts.length == users.length || amounts.length == 1 , 'amounts is not the same as users');
 
-        // Stats
-        totalRewards[token] += amount;
+        bool singleAmount = amounts.length == 1; 
 
-        emit Reward(campaignID, _msgSender(), amount);
+        // reward each user with the amount
+        for (uint256 i = 0; i < users.length; i++) {
+            uint256 amount = singleAmount ? amounts[0] : amounts[i];
+            userRewards[campaignID][users[i]] += amount;
+            address token = campaigns[campaignID].tokenReward;
+
+            // Stats
+            totalRewards[token] += amount;
+        }
+
+        emit Reward(campaignID, users, amounts);
     }
 
     // Function to be called when our user wants to claim their reward
