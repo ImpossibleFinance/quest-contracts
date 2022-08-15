@@ -99,7 +99,19 @@ export default describe('QuestReward', function () {
     expect(await QuestRewardContract.rewarder()).to.equal(rewarder.address)
   })
 
+  it('cannot sets rewarder as non admin', async function () {
+    await expect(
+      QuestRewardContract.connect(user5).setRewarder(rewarder.address)
+    ).to.be.revertedWith('Ownable: caller is not the owner')
+  })
+
   it('create campaigns correctly', async () => {
+    await expect(
+      QuestRewardContract.connect(user2).createCampaign(
+        TestToken.address,
+        campaignID
+      )
+    ).to.be.revertedWith('caller not rewarder')
     await QuestRewardContract.connect(rewarder).createCampaign(
       TestToken.address,
       campaignID
@@ -112,7 +124,7 @@ export default describe('QuestReward', function () {
   it('cannot reward when no users', async () => {
     expect(
       QuestRewardContract.connect(rewarder).reward([], [], campaignID)
-    ).to.be.revertedWith('amounts and users should be more than zero')
+    ).to.be.revertedWith('users should be more than zero')
   })
 
   it('cannot reward when amounts are not the same as users', async () => {
@@ -193,6 +205,12 @@ export default describe('QuestReward', function () {
     expect(await TestToken.balanceOf(user.address)).to.equal(
       USER_REWARD.toString()
     )
+
+    // User 1 should not be able to claim again
+    expect(
+      QuestRewardContract.connect(user).claim(campaignID)
+    ).to.be.revertedWith('nothing to be claimed')
+    mineNext()
 
     // User4 Claiming the reward, should fail because pool is not enough
     expect(
