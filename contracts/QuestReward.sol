@@ -39,7 +39,7 @@ contract QuestReward is Ownable, ReentrancyGuard {
 
     // EVENTS
 
-    event SetRewarder(address indexed rewarder);
+    event SetRewarder(address indexed oldRewarder, address indexed rewarder);
     event Reward(string indexed campaignID, address[] users, uint256[] amounts);
     event Fund(string indexed campaignID, address indexed user, uint256 amount);
     event Claim(address indexed user, string campaignID, uint256 amount);
@@ -67,10 +67,10 @@ contract QuestReward is Ownable, ReentrancyGuard {
     // Function for owner to set an rewarder
     function setRewarder(address _rewarder) external onlyOwner {
         require(_rewarder != address(0), '0x0 address');
-
+        address oldRewarder = rewarder;
         rewarder = _rewarder;
 
-        emit SetRewarder(_rewarder);
+        emit SetRewarder(oldRewarder, _rewarder);
     }
 
     // Function for funding the tokens to the reward pool
@@ -78,10 +78,14 @@ contract QuestReward is Ownable, ReentrancyGuard {
         address tokenAddress = campaigns[campaignID].tokenReward;
 
         // transfer specified amount from funder to this contract
+        uint256 beforeAmt = ERC20(tokenAddress).balanceOf(address(this));
         ERC20(tokenAddress).safeTransferFrom(_msgSender(), address(this), amount);
-        campaigns[campaignID].rewardPool += amount;
+        uint256 afterAmt = ERC20(tokenAddress).balanceOf(address(this));
 
-        emit Fund(campaignID, _msgSender(), amount);
+        uint256 addedAmt = afterAmt - beforeAmt;
+        campaigns[campaignID].rewardPool += addedAmt;
+
+        emit Fund(campaignID, _msgSender(), addedAmt);
     }
 
     // Function for withdrawing money from reward pool, in case we want to sunset this contract
@@ -109,10 +113,10 @@ contract QuestReward is Ownable, ReentrancyGuard {
 
     // Function to be called when we want to reward user after finishing a campaign
     function reward(uint256[] calldata amounts, address[] calldata users, string calldata campaignID) external onlyRewarder {
-        require(amounts.length > 0 && users.length > 0 , 'amounts and users should be more than zero');
-        require(amounts.length == users.length || amounts.length == 1 , 'amounts is not the same as users');
-
         bool singleAmount = amounts.length == 1; 
+
+        require(users.length > 0 , 'users should be more than zero');
+        require(amounts.length == users.length || singleAmount , 'amounts is not the same as users');
 
         // reward each user with the amount
         for (uint256 i = 0; i < users.length; i++) {
@@ -131,8 +135,9 @@ contract QuestReward is Ownable, ReentrancyGuard {
     function claim(string calldata campaignID) external nonReentrant {
         address rewardToken = campaigns[campaignID].tokenReward;
         uint256 amountToBeClaimed = userRewards[campaignID][_msgSender()];
-
+        require(amountToBeClaimed > 0, 'nothing to be claimed');
         require(amountToBeClaimed <= campaigns[campaignID].rewardPool, 'reward pool is not enough');
+
         userRewards[campaignID][_msgSender()] = 0;
         claimedRewards[campaignID][_msgSender()] += amountToBeClaimed;
 
